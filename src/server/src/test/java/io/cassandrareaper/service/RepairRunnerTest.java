@@ -127,6 +127,7 @@ public final class RepairRunnerTest {
             .blacklistedTables(BLACKLISTED_TABLES)
             .repairThreadCount(REPAIR_THREAD_COUNT));
     DateTimeUtils.setCurrentMillisFixed(TIME_RUN);
+
     RepairRun run = storage.addRepairRun(
             RepairRun.builder(cluster.getName(), cf.getId())
                 .intensity(INTENSITY)
