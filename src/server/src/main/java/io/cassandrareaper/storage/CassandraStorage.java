@@ -1166,6 +1166,9 @@ public final class CassandraStorage implements IStorage, IDistributedStorage {
 
     if (tokenRanges.size() > 0) {
       segmentBuilder.withTokenRanges(tokenRanges);
+      if (null != segmentRow.getMap("replicas", String.class, String.class)) {
+        segmentBuilder = segmentBuilder.withReplicas(segmentRow.getMap("replicas", String.class, String.class));
+      }
     } else {
       // legacy path, for segments that don't have a token range list
       segmentBuilder.withTokenRange(

@@ -1084,7 +1084,7 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
   public boolean lockRunningRepairsForNodes(UUID repairId, UUID segmentId, Set<String> replicas) {
     if (null != jdbi) {
       try (Handle h = jdbi.open()) {
-        //h.begin();
+        h.begin();
         // Initialize rows for each replicas in the lock table
         for (String replica:replicas) {
           try {
@@ -1105,7 +1105,7 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
                   getExpirationTime(reaperTimeout));
               if (rowsUpdated != 1) {
                 LOG.info("Failed to take lead on node {} for segment {}", replica, segmentId);
-                //h.rollback();
+                h.rollback();
                 return false;
               }
             } else {
@@ -1113,7 +1113,7 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
             }
           }
         }
-        //h.commit();
+        h.commit();
         return true;
       }
     }

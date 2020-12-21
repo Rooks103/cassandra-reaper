@@ -65,6 +65,7 @@ public final class RepairManager implements AutoCloseable {
   private final ListeningScheduledExecutorService executor;
   private final long repairTimeoutMillis;
   private final long retryDelayMillis;
+  private final int maxParallelRepairs;
 
   private RepairManager(
       AppContext context,
@@ -73,7 +74,8 @@ public final class RepairManager implements AutoCloseable {
       long repairTimeout,
       TimeUnit repairTimeoutTimeUnit,
       long retryDelay,
-      TimeUnit retryDelayTimeUnit) throws ReaperException {
+      TimeUnit retryDelayTimeUnit,
+      int maxParallelRepairs) throws ReaperException {
 
     this.context = context;
     this.clusterFacade = clusterFacade;
@@ -82,6 +84,7 @@ public final class RepairManager implements AutoCloseable {
 
     this.executor = MoreExecutors.listeningDecorator(
         new InstrumentedScheduledExecutorService(executor, context.metricRegistry));
+    this.maxParallelRepairs = maxParallelRepairs;
   }
 
   @VisibleForTesting
@@ -92,7 +95,8 @@ public final class RepairManager implements AutoCloseable {
       long repairTimeout,
       TimeUnit repairTimeoutTimeUnit,
       long retryDelay,
-      TimeUnit retryDelayTimeUnit) throws ReaperException {
+      TimeUnit retryDelayTimeUnit,
+      int maxParallelRepairs) throws ReaperException {
 
     return new RepairManager(
         context,
@@ -101,7 +105,8 @@ public final class RepairManager implements AutoCloseable {
         repairTimeout,
         repairTimeoutTimeUnit,
         retryDelay,
-        retryDelayTimeUnit);
+        retryDelayTimeUnit,
+        maxParallelRepairs);
   }
 
   public static RepairManager create(
@@ -119,7 +124,28 @@ public final class RepairManager implements AutoCloseable {
         repairTimeout,
         repairTimeoutTimeUnit,
         retryDelay,
-        retryDelayTimeUnit);
+        retryDelayTimeUnit,
+        1);
+  }
+
+  public static RepairManager create(
+      AppContext context,
+      ScheduledExecutorService executor,
+      long repairTimeout,
+      TimeUnit repairTimeoutTimeUnit,
+      long retryDelay,
+      TimeUnit retryDelayTimeUnit,
+      int maxParallelRepairs) throws ReaperException {
+
+    return create(
+        context,
+        ClusterFacade.create(context),
+        executor,
+        repairTimeout,
+        repairTimeoutTimeUnit,
+        retryDelay,
+        retryDelayTimeUnit,
+        maxParallelRepairs);
   }
 
   long getRepairTimeoutMillis() {
@@ -311,46 +337,52 @@ public final class RepairManager implements AutoCloseable {
   public RepairRun startRepairRun(RepairRun runToBeStarted) throws ReaperException {
     assert null != executor : "you need to initialize the thread pool first";
     UUID runId = runToBeStarted.getId();
-    LOG.info("Starting a run with id #{} with current state '{}'", runId, runToBeStarted.getRunState());
-    switch (runToBeStarted.getRunState()) {
-      case NOT_STARTED: {
-        RepairRun updatedRun = runToBeStarted
-            .with()
-            .runState(RepairRun.RunState.RUNNING)
-            .startTime(DateTime.now())
-            .build(runToBeStarted.getId());
-        if (!context.storage.updateRepairRun(updatedRun)) {
-          throw new ReaperException("failed updating repair run " + updatedRun.getId());
+    if (repairRunners.size() >= maxParallelRepairs) {
+      LOG.info("Maximum parallel repairs reached ({}). Postponing repair run with id {}",
+          maxParallelRepairs, runId);
+      throw new ReaperException("Maximum parallel repairs reached. Postponing repair with id " + runId);
+    } else {
+      LOG.info("Starting a run with id #{} with current state '{}'", runId, runToBeStarted.getRunState());
+      switch (runToBeStarted.getRunState()) {
+        case NOT_STARTED: {
+          RepairRun updatedRun = runToBeStarted
+              .with()
+              .runState(RepairRun.RunState.RUNNING)
+              .startTime(DateTime.now())
+              .build(runToBeStarted.getId());
+          if (!context.storage.updateRepairRun(updatedRun)) {
+            throw new ReaperException("failed updating repair run " + updatedRun.getId());
+          }
+          startRunner(runId);
+          return updatedRun;
         }
-        startRunner(runId);
-        return updatedRun;
-      }
-      case PAUSED: {
-        RepairRun updatedRun = runToBeStarted.with()
-            .runState(RepairRun.RunState.RUNNING)
-            .pauseTime(null)
-            .build(runToBeStarted.getId());
+        case PAUSED: {
+          RepairRun updatedRun = runToBeStarted.with()
+              .runState(RepairRun.RunState.RUNNING)
+              .pauseTime(null)
+              .build(runToBeStarted.getId());
 
-        if (!context.storage.updateRepairRun(updatedRun)) {
-          throw new ReaperException("failed updating repair run " + updatedRun.getId());
+          if (!context.storage.updateRepairRun(updatedRun)) {
+            throw new ReaperException("failed updating repair run " + updatedRun.getId());
+          }
+          return updatedRun;
         }
-        return updatedRun;
-      }
-      case RUNNING:
-        LOG.info("re-trigger a running run after restart, with id {}", runId);
-        startRunner(runId);
-        return runToBeStarted;
-      case ERROR: {
-        RepairRun updatedRun
-            = runToBeStarted.with().runState(RepairRun.RunState.RUNNING).endTime(null).build(runToBeStarted.getId());
-        if (!context.storage.updateRepairRun(updatedRun)) {
-          throw new ReaperException("failed updating repair run " + updatedRun.getId());
+        case RUNNING:
+          LOG.info("re-trigger a running run after restart, with id {}", runId);
+          startRunner(runId);
+          return runToBeStarted;
+        case ERROR: {
+          RepairRun updatedRun
+              = runToBeStarted.with().runState(RepairRun.RunState.RUNNING).endTime(null).build(runToBeStarted.getId());
+          if (!context.storage.updateRepairRun(updatedRun)) {
+            throw new ReaperException("failed updating repair run " + updatedRun.getId());
+          }
+          startRunner(runId);
+          return updatedRun;
         }
-        startRunner(runId);
-        return updatedRun;
+        default:
+          throw new ReaperException("cannot start run with state: " + runToBeStarted.getRunState());
       }
-      default:
-        throw new ReaperException("cannot start run with state: " + runToBeStarted.getRunState());
     }
   }
 

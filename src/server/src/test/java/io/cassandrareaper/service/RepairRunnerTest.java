@@ -127,7 +127,6 @@ public final class RepairRunnerTest {
             .blacklistedTables(BLACKLISTED_TABLES)
             .repairThreadCount(REPAIR_THREAD_COUNT));
     DateTimeUtils.setCurrentMillisFixed(TIME_RUN);
-
     RepairRun run = storage.addRepairRun(
             RepairRun.builder(cluster.getName(), cf.getId())
                 .intensity(INTENSITY)
@@ -234,7 +233,8 @@ public final class RepairRunnerTest {
             500,
             TimeUnit.MILLISECONDS,
             1,
-            TimeUnit.MILLISECONDS);
+            TimeUnit.MILLISECONDS,
+            1);
     context.jmxConnectionFactory = new JmxConnectionFactory(context, new NoopCrypotograph()) {
           @Override
           protected JmxProxy connectImpl(Node host) throws ReaperException {
@@ -246,7 +246,6 @@ public final class RepairRunnerTest {
       try {
         mutex.acquire();
         LOG.info("MUTEX ACQUIRED");
-        // TODO: refactor so that we can properly wait for the repair runner to finish rather than using this sleep()
         Thread.sleep(1000);
         return true;
       } catch (InterruptedException ex) {
@@ -384,7 +383,8 @@ public final class RepairRunnerTest {
             500,
             TimeUnit.MILLISECONDS,
             1,
-            TimeUnit.MILLISECONDS);
+            TimeUnit.MILLISECONDS,
+            1);
     context.jmxConnectionFactory = new JmxConnectionFactory(context, new NoopCrypotograph()) {
           @Override
           protected JmxProxy connectImpl(Node host) throws ReaperException {
@@ -500,7 +500,8 @@ public final class RepairRunnerTest {
         500,
         TimeUnit.MILLISECONDS,
         1,
-        TimeUnit.MILLISECONDS);
+        TimeUnit.MILLISECONDS,
+        1);
     AtomicInteger repairNumberCounter = new AtomicInteger(1);
 
     when(jmx.triggerRepair(any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any(), anyInt()))
@@ -773,9 +774,8 @@ public final class RepairRunnerTest {
                         .withReplicas(NODES_MAP)
                         .build(),
                     cf)));
-
     final UUID RUN_ID = run.getId();
-    final UUID SEGMENT_ID = storage.getNextFreeSegmentInRange(run.getId(), Optional.empty()).get().getId();
+    final UUID SEGMENT_ID = storage.getNextFreeSegment(run.getId()).get().getId();
     assertEquals(storage.getRepairSegment(RUN_ID, SEGMENT_ID).get().getState(), RepairSegment.State.NOT_STARTED);
     final JmxProxy jmx = JmxProxyTest.mockJmxProxyImpl();
     when(jmx.getClusterName()).thenReturn(cluster.getName());
@@ -808,7 +808,8 @@ public final class RepairRunnerTest {
         500,
         TimeUnit.MILLISECONDS,
         1,
-        TimeUnit.MILLISECONDS);
+        TimeUnit.MILLISECONDS,
+        1);
     AtomicInteger repairNumberCounter = new AtomicInteger(1);
 
     when(jmx.triggerRepair(any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any(), anyInt()))
