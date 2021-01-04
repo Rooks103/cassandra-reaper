@@ -1018,11 +1018,11 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
     if (null != jdbi) {
       try (Handle h = jdbi.open()) {
         String opString = getPostgresStorage(h).listOperations(clusterName, operationType.getName(), host);
-        return (opString != null) ? opString : "[]";
+        return (opString != null) ? opString : "";
       }
     }
     LOG.error("Failed retrieving node operations for cluster {}, node {}", clusterName, host);
-    return "[]";
+    return "";
   }
 
   @Override
@@ -1088,7 +1088,7 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
         // Initialize rows for each replicas in the lock table
         for (String replica:replicas) {
           try {
-            int rowsInserted = getPostgresStorage(h).insertNodeLock(
+            getPostgresStorage(h).insertNodeLock(
                 repairId,
                 replica,
                 reaperInstanceId,
@@ -1096,20 +1096,13 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
                 segmentId);
           } catch (UnableToExecuteStatementException ex) {
             if (JdbiExceptionUtil.isDuplicateKeyError(ex)) {
-              int rowsUpdated = getPostgresStorage(h).updateNodeLock(
-                  repairId,
-                  replica,
-                  reaperInstanceId,
-                  AppContext.REAPER_INSTANCE_ADDRESS,
-                  segmentId,
-                  getExpirationTime(reaperTimeout));
-              if (rowsUpdated != 1) {
-                LOG.info("Failed to take lead on node {} for segment {}", replica, segmentId);
-                h.rollback();
+              if (!updateLockForNode(repairId, segmentId, h, replica)) {
                 return false;
               }
             } else {
               LOG.error("Failed taking lead on segment {}", segmentId, ex);
+              h.rollback();
+              return false;
             }
           }
         }
@@ -1118,6 +1111,32 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
       }
     }
     return false;
+  }
+
+  private boolean updateLockForNode(UUID repairId, UUID segmentId, Handle handle, String replica) {
+    try {
+      int rowsUpdated = getPostgresStorage(handle).updateNodeLock(
+          repairId,
+          replica,
+          reaperInstanceId,
+          AppContext.REAPER_INSTANCE_ADDRESS,
+          segmentId,
+          getExpirationTime(reaperTimeout));
+      if (rowsUpdated != 1) {
+        logAndRollback(segmentId, handle, replica);
+        return false;
+      } else {
+        return true;
+      }
+    } catch (UnableToExecuteStatementException ex) {
+      logAndRollback(segmentId, handle, replica);
+      return false;
+    }
+  }
+
+  private void logAndRollback(UUID segmentId, Handle handle, String replica) {
+    LOG.info("Failed to take lead on node {} for segment {}", replica, segmentId);
+    handle.rollback();
   }
 
   @Override

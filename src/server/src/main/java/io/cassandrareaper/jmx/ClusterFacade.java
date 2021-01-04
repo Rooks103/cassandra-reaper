@@ -781,6 +781,12 @@ public final class ClusterFacade {
    * @throws IOException if parsing the JSON breaks
    */
   public static CompactionStats parseCompactionStats(String json) throws IOException {
+    if (json.isEmpty()) {
+      return CompactionStats.builder()
+          .withPendingCompactions(-1)
+          .withActiveCompactions(Collections.emptyList())
+          .build();
+    }
     try {
       return parseJson(json, new TypeReference<CompactionStats>(){});
     } catch (IOException e) {

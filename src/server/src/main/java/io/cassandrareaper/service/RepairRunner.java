@@ -427,8 +427,8 @@ final class RepairRunner implements Runnable {
     LOG.debug("preparing to repair segment {} on run with id {}", segmentId, repairRunId);
 
     List<String> potentialCoordinators;
-    Set<String> segmentReplicas = segment.getReplicas().keySet();
     if (!repairUnit.getIncrementalRepair()) {
+      Set<String> segmentReplicas = segment.getReplicas().keySet();
       // full repair
       try {
         potentialCoordinators = filterPotentialCoordinatorsByDatacenters(

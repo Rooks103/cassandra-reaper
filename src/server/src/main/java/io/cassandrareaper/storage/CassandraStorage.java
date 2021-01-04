@@ -570,6 +570,7 @@ public final class CassandraStorage implements IStorage, IDistributedStorage {
                 "INSERT INTO reaper_db.running_repairs(repair_id, node)"
                     + "values (?, ?) IF NOT EXISTS")
             .setSerialConsistencyLevel(ConsistencyLevel.SERIAL)
+            .setConsistencyLevel(ConsistencyLevel.QUORUM)
             .setIdempotent(true);
     setRunningRepairsPrepStmt
       = session
@@ -578,6 +579,7 @@ public final class CassandraStorage implements IStorage, IDistributedStorage {
             + " SET reaper_instance_host = ?, reaper_instance_id = ?, segment_id = ?"
             + " WHERE repair_id = ? AND node = ? IF reaper_instance_id = ?")
         .setSerialConsistencyLevel(ConsistencyLevel.SERIAL)
+        .setConsistencyLevel(ConsistencyLevel.QUORUM)
         .setIdempotent(false);
 
     getRunningRepairsPrepStmt
@@ -2039,13 +2041,24 @@ public final class CassandraStorage implements IStorage, IDistributedStorage {
 
   @Override
   public String listOperations(String clusterName, OpType operationType, String host) {
-    ResultSet operations
-        = session.execute(
+    List<ResultSetFuture> futures = Lists.newArrayList();
+    futures.add(session.executeAsync(
             listOperationsForNodePrepStmt.bind(
-                clusterName, operationType.getName(), DateTime.now().toString(TIME_BUCKET_FORMATTER), host));
-    return operations.isExhausted()
-        ? "[]"
-        : operations.one().getString("data");
+                clusterName, operationType.getName(), DateTime.now().toString(TIME_BUCKET_FORMATTER), host)));
+    futures.add(session.executeAsync(
+        listOperationsForNodePrepStmt.bind(
+            clusterName,
+            operationType.getName(),
+            DateTime.now().minusMinutes(1).toString(TIME_BUCKET_FORMATTER),
+            host)));
+    for (ResultSetFuture future:futures) {
+      ResultSet operations = future.getUninterruptibly();
+      for (Row row:operations) {
+        return row.getString("data");
+      }
+    }
+
+    return "";
   }
 
   @Override

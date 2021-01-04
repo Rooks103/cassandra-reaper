@@ -161,4 +161,11 @@ public class ClusterFacadeTest {
     ClusterFacade.parseCompactionStats(compactionJson);
   }
 
+  @Test
+  public void parseEmptyCompactionStats() throws IOException {
+    String compactionJson = "";
+    CompactionStats compactionStats = ClusterFacade.parseCompactionStats(compactionJson);
+    assertEquals(-1L, compactionStats.getPendingCompactions().longValue());
+  }
+
 }
