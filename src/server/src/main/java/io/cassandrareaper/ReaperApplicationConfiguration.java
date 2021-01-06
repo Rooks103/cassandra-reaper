@@ -262,7 +262,7 @@ public final class ReaperApplicationConfiguration extends Configuration {
 
   public int getMaxParallelRepairs() {
     return maxParallelRepairs == null
-        ? 5
+        ? 2
         : maxParallelRepairs;
   }
 
