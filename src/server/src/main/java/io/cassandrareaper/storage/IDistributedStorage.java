@@ -82,7 +82,7 @@ public interface IDistributedStorage {
    * @param ranges list of ranges we're looking a segment for
    * @return an optional repair segment to process
    */
-  Optional<RepairSegment> getNextFreeSegmentForRanges(
+  List<RepairSegment> getNextFreeSegmentsForRanges(
       UUID runId, List<RingRange> ranges);
 
   List<GenericMetric> getMetrics(

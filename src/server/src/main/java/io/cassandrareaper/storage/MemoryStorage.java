@@ -40,6 +40,7 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 import com.datastax.driver.core.utils.UUIDs;
 import com.google.common.base.Preconditions;
@@ -323,13 +324,10 @@ public final class MemoryStorage implements IStorage {
   }
 
   @Override
-  public Optional<RepairSegment> getNextFreeSegment(UUID runId) {
-    for (RepairSegment segment : repairSegmentsByRunId.get(runId).values()) {
-      if (segment.getState() == RepairSegment.State.NOT_STARTED) {
-        return Optional.of(segment);
-      }
-    }
-    return Optional.empty();
+  public List<RepairSegment> getNextFreeSegments(UUID runId) {
+    return repairSegmentsByRunId.get(runId).values().stream()
+                                                    .filter(seg -> seg.getState() == RepairSegment.State.NOT_STARTED)
+                                                    .collect(Collectors.toList());
   }
 
   @Override

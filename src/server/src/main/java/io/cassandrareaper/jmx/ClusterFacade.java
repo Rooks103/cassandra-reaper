@@ -456,15 +456,15 @@ public final class ClusterFacade {
   public CompactionStats listActiveCompactions(Node node)
       throws MalformedObjectNameException, ReflectionException, ReaperException, InterruptedException, IOException {
 
-    LOG.info("Listing active compactions for node {}", node);
+    LOG.debug("Listing active compactions for node {}", node);
     String nodeDc = getDatacenter(node);
     if (nodeIsAccessibleThroughJmx(nodeDc, node.getHostname())) {
-      LOG.info("Yay!! Node {} in DC {} is accessible through JMX", node.getHostname(), nodeDc);
+      LOG.debug("Yay!! Node {} in DC {} is accessible through JMX", node.getHostname(), nodeDc);
       // We have direct JMX access to the node
       return listCompactionStatsDirect(node);
     } else {
       // We don't have access to the node through JMX, so we'll get data from the database
-      LOG.info("Node {} in DC {} is not accessible through JMX", node.getHostname(), nodeDc);
+      LOG.debug("Node {} in DC {} is not accessible through JMX", node.getHostname(), nodeDc);
 
       String compactionsJson = ((IDistributedStorage)context.storage)
           .listOperations(node.getClusterName(), OpType.OP_COMPACTION, node.getHostname());
@@ -683,7 +683,7 @@ public final class ClusterFacade {
    */
   public Pair<Node, String> takeSnapshot(String snapshotName, Node host, String... keyspaces) throws ReaperException {
     Preconditions.checkArgument(!context.config.isInSidecarMode(), "Snapshots aren't yet supported in sidecar mode");
-    LOG.info("Taking snapshot for node {} and keyspace {}", host, keyspaces);
+    LOG.debug("Taking snapshot for node {} and keyspace {}", host, keyspaces);
     return Pair.of(host, SnapshotProxy.create(connect(host)).takeSnapshot(snapshotName, keyspaces));
   }
 

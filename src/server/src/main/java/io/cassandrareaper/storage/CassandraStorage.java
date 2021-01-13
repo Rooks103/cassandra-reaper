@@ -1202,43 +1202,41 @@ public final class CassandraStorage implements IStorage, IDistributedStorage {
   }
 
   @Override
-  public Optional<RepairSegment> getNextFreeSegment(UUID runId) {
+  public List<RepairSegment> getNextFreeSegments(UUID runId) {
     List<RepairSegment> segments = Lists.<RepairSegment>newArrayList(getRepairSegmentsForRun(runId));
     Collections.shuffle(segments);
 
     Set<String> lockedNodes = getLockedNodesForRun(runId);
-    for (RepairSegment seg : segments) {
-      if (segmentIsCandidate(seg, lockedNodes)) {
-        return Optional.of(seg);
-      }
-    }
-    return Optional.empty();
+    List<RepairSegment> candidates = segments.stream()
+                                             .filter(seg -> segmentIsCandidate(seg, lockedNodes))
+                                             .collect(Collectors.toList());
+    return candidates;
   }
 
   @Override
-  public Optional<RepairSegment> getNextFreeSegmentForRanges(
+  public List<RepairSegment> getNextFreeSegmentsForRanges(
       UUID runId,
       List<RingRange> ranges) {
     List<RepairSegment> segments
         = Lists.<RepairSegment>newArrayList(getRepairSegmentsForRun(runId));
     Collections.shuffle(segments);
     Set<String> lockedNodes = getLockedNodesForRun(runId);
-    for (RepairSegment seg : segments) {
-      if (segmentIsCandidate(seg, lockedNodes)) {
-        for (RingRange range : ranges) {
-          if (segmentIsWithinRange(seg, range)) {
-            LOG.debug(
-                "Segment [{}, {}] is within range [{}, {}]",
-                seg.getStartToken(),
-                seg.getEndToken(),
-                range.getStart(),
-                range.getEnd());
-            return Optional.of(seg);
-          }
-        }
+    List<RepairSegment> candidates = segments.stream()
+                                             .filter(seg -> segmentIsCandidate(seg, lockedNodes))
+                                             .filter(seg -> segmentIsWithinRanges(seg, ranges))
+                                             .collect(Collectors.toList());
+
+    return candidates;
+  }
+
+  private boolean segmentIsWithinRanges(RepairSegment seg, List<RingRange> ranges) {
+    for (RingRange range : ranges) {
+      if (segmentIsWithinRange(seg, range)) {
+        return true;
       }
     }
-    return Optional.empty();
+
+    return false;
   }
 
   private boolean segmentIsCandidate(RepairSegment seg, Set<String> lockedNodes) {

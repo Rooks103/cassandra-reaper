@@ -452,19 +452,15 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
   }
 
   @Override
-  public Optional<RepairSegment> getNextFreeSegment(UUID runId) {
-    Collection<RepairSegment> result;
-    Set<String> lockedNodes = getLockedNodesForRun(runId);
-    try (Handle h = jdbi.open()) {
-      result = getPostgresStorage(h).getNextFreeRepairSegment(UuidUtil.toSequenceId(runId));
-      for (RepairSegment segment:result) {
-        if (Sets.intersection(lockedNodes, segment.getReplicas().keySet()).isEmpty()) {
-          return Optional.ofNullable(segment);
+  public List<RepairSegment> getNextFreeSegments(UUID runId) {
+    List<RepairSegment> segments = Lists.<RepairSegment>newArrayList(getRepairSegmentsForRun(runId));
+    Collections.shuffle(segments);
 
-        }
-      }
-    }
-    return Optional.empty();
+    Set<String> lockedNodes = getLockedNodesForRun(runId);
+    List<RepairSegment> candidates = segments.stream()
+                                             .filter(seg -> segmentIsCandidate(seg, lockedNodes))
+                                             .collect(Collectors.toList());
+    return candidates;
   }
 
   @Override
@@ -879,32 +875,34 @@ public class PostgresStorage implements IStorage, IDistributedStorage {
   }
 
   @Override
-  public Optional<RepairSegment> getNextFreeSegmentForRanges(
+  public List<RepairSegment> getNextFreeSegmentsForRanges(
       UUID runId,
       List<RingRange> ranges) {
     List<RepairSegment> segments
         = Lists.<RepairSegment>newArrayList(getRepairSegmentsForRun(runId));
     Collections.shuffle(segments);
     Set<String> lockedNodes = getLockedNodesForRun(runId);
+    List<RepairSegment> candidates = segments.stream()
+                                             .filter(seg -> segmentIsCandidate(seg, lockedNodes))
+                                             .filter(seg -> segmentIsWithinRanges(seg, ranges))
+                                             .collect(Collectors.toList());
 
-    for (RepairSegment seg : segments) {
-      if (seg.getState().equals(RepairSegment.State.NOT_STARTED)) {
-        if (Sets.intersection(lockedNodes, seg.getReplicas().keySet()).isEmpty()) {
-          for (RingRange range : ranges) {
-            if (segmentIsWithinRange(seg, range)) {
-              LOG.debug(
-                  "Segment [{}, {}] is within range [{}, {}]",
-                  seg.getStartToken(),
-                  seg.getEndToken(),
-                  range.getStart(),
-                  range.getEnd());
-              return Optional.of(seg);
-            }
-          }
-        }
+    return candidates;
+  }
+
+  private boolean segmentIsCandidate(RepairSegment seg, Set<String> lockedNodes) {
+    return seg.getState().equals(RepairSegment.State.NOT_STARTED)
+        && Sets.intersection(lockedNodes, seg.getReplicas().keySet()).isEmpty();
+  }
+
+  private boolean segmentIsWithinRanges(RepairSegment seg, List<RingRange> ranges) {
+    for (RingRange range : ranges) {
+      if (segmentIsWithinRange(seg, range)) {
+        return true;
       }
     }
-    return Optional.empty();
+
+    return false;
   }
 
   @Override

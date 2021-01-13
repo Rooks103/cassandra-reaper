@@ -29,6 +29,7 @@ import io.cassandrareaper.resources.view.RepairScheduleStatus;
 import io.cassandrareaper.service.RepairParameters;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.SortedSet;
 import java.util.UUID;
@@ -99,7 +100,7 @@ public interface IStorage {
    *      handled. When start = end, consider that as a range that covers the whole ring.
    * @return a segment enclosed by the range with state NOT_STARTED, or nothing.
    */
-  Optional<RepairSegment> getNextFreeSegment(UUID runId);
+  List<RepairSegment> getNextFreeSegments(UUID runId);
 
   Collection<RepairSegment> getSegmentsWithState(UUID runId, RepairSegment.State segmentState);
 
