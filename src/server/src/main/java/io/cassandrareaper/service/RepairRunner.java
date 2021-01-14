@@ -300,7 +300,10 @@ final class RepairRunner implements Runnable {
 
     Optional<RepairSegment> nextRepairSegment = Optional.empty();
     for (RepairSegment segment : nextRepairSegments) {
-      JmxProxy coordinator = clusterFacade.connect(cluster, segment.getReplicas().keySet());
+      Collection<String> potentialReplicas = repairUnit.getIncrementalRepair()
+          ? Collections.singletonList(segment.getCoordinatorHost())
+          : segment.getReplicas().keySet();
+      JmxProxy coordinator = clusterFacade.connect(cluster, potentialReplicas);
       if (nodesReadyForNewRepair(coordinator, segment, segment.getReplicas(), repairRunId)) {
         nextRepairSegment = Optional.of(segment);
       }
@@ -403,7 +406,7 @@ final class RepairRunner implements Runnable {
     }
 
     if (okToRepairSegment(allHostsChecked, allLocalDcHostsChecked, context.config.getDatacenterAvailability())) {
-      LOG.info("Ok to repair segment '{}' on repair run with id '{}'", segment.getId(), segment.getRunId());
+      LOG.debug("Ok to repair segment '{}' on repair run with id '{}'", segment.getId(), segment.getRunId());
       return true;
     } else {
       String msg = String.format(

@@ -571,7 +571,7 @@ public final class CassandraStorage implements IStorage, IDistributedStorage {
                     + "values (?, ?) IF NOT EXISTS")
             .setSerialConsistencyLevel(ConsistencyLevel.SERIAL)
             .setConsistencyLevel(ConsistencyLevel.QUORUM)
-            .setIdempotent(true);
+            .setIdempotent(false);
     setRunningRepairsPrepStmt
       = session
         .prepare(
